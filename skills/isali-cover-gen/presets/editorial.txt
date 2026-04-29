@@ -1,0 +1,13 @@
+设计一张 {aspect_ratio} 比例的期刊/新闻风格封面图，类似 The Economist 或 The New Yorker 的专题报道封面。
+
+背景：米白色或淡奶油色纸张质感，带轻微的印刷纹理。
+
+主视觉：画面左上方一个抽象的图形/象征性插图（由 {brand_color} 主色调构成），构图干净，像编辑插画。
+
+主标题：画面下半部居中或右对齐，"{title}" 使用 serif 字体（像 Playfair Display 或 Didot），字号大而优雅，字母间距紧凑。
+
+副标题：主标题下方，"{subtitle}" 使用 serif italic 字体，字号适中。
+
+底部：{bullets_str}，每项前 "•"，深灰色 sans-serif 字体，字号小。
+
+整体：纸质感、高级、编辑感，不要任何科技或霓虹色调。

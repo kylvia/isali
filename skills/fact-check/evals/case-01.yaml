@@ -1,0 +1,17 @@
+name: simple-article
+description: 一篇含 3 条声明的短文，期望 skill 识别可验证点并标出
+
+input:
+  article: |
+    刚发布的 GPT-Image-2 据说在 Arena 榜单上领先第二名 240 分。
+    Reddit 上有人说它不支持透明背景。
+    已经有 3 家大厂接入了。
+
+expected:
+  identifies_claims:
+    - "Arena 榜单 +240 分" → 需要查 Arena 官方
+    - "不支持透明背景" → Reddit 三手，需一手验证
+    - "3 家大厂接入" → 数字 + 名单需要官方确认
+  tags_sources:
+    - 必须把 Reddit 标为三手
+    - 必须建议去 Arena.ai 查一手

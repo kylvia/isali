@@ -1,0 +1,19 @@
+name: minimal-tech-prompt-build
+description: minimal-tech preset 能正确拼接 title/subtitle/bullets 为 prompt
+
+input:
+  title: "GPT-Image-2"
+  subtitle: "一次跳过两代"
+  bullets: ["Arena 榜单 #1", "+241 分"]
+  style: minimal-tech
+  mode: plan    # 不实际调 API
+
+expected:
+  exit_code: 0
+  prompt_contains:
+    - "GPT-Image-2"
+    - "一次跳过两代"
+    - "Arena 榜单 #1"
+    - "+241 分"
+    - "2.35:1"
+  side_effects: none

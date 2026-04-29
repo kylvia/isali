@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""isali — your AI workflow harness extension.
+
+Usage:
+    isali <cmd> [args]
+
+Commands:
+    doctor          Environment self-check
+    logs            Inspect audit log
+    profile         List / switch / show active profile
+    run-verify      Run verify.sh across all skills
+    new-skill       Scaffold a new skill
+    push            Push markdown to WeChat draft (via baoyu)
+    cover           Generate article cover image
+    fetch           Fetch webpage/WeChat/X content → markdown
+    fact-check      Lint markdown for suspicious claims
+    version         Print version
+    help            Show this help
+
+All commands support:
+    --plan          Show what would happen, don't execute
+    --dry-run       Do everything except the final side-effect
+    --verbose       Detailed output
+    --json          Machine-readable output
+"""
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+# Expose packages/ on PYTHONPATH for all subprocess children.
+PACKAGES = str(ROOT / 'packages')
+os.environ['PYTHONPATH'] = PACKAGES + os.pathsep + os.environ.get('PYTHONPATH', '')
+sys.path.insert(0, PACKAGES)
+
+# Prefer the isali venv python (has PyYAML + mcp). Fallback to system.
+_VENV_PY = Path.home() / '.isali' / 'venv' / 'bin' / 'python'
+PYTHON = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
+
+# Command registry: name → (kind, target)
+#   kind='skill' → skills/<target>/scripts/main.py
+#   kind='core'  → packages/isali_core/<target>.py (module, run via -m)
+COMMANDS = {
+    'doctor':     ('core',  'doctor'),
+    'new-skill':  ('core',  'new_skill'),
+    'logs':       ('core',  'logs'),
+    'profile':    ('core',  'profile_cli'),
+    'run-verify': ('core',  'run_verify'),
+    'push':       ('skill', 'isali-wechat-post'),
+    'cover':      ('skill', 'isali-cover-gen'),
+    'fetch':      ('skill', 'isali-fetch'),
+    'fact-check': ('skill', 'fact-check'),
+}
+
+
+def show_help():
+    print(__doc__)
+    print('\nAvailable commands:')
+    for cmd in sorted(COMMANDS.keys()):
+        print(f'  isali {cmd}')
+
+
+def main() -> int:
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help', 'help'):
+        show_help()
+        return 0
+
+    cmd = sys.argv[1]
+    rest = sys.argv[2:]
+
+    if cmd == 'version':
+        from isali_core import __version__
+        print(f'isali {__version__}')
+        return 0
+
+    if cmd not in COMMANDS:
+        print(f'unknown command: {cmd}', file=sys.stderr)
+        print(f'run `isali help` for the list', file=sys.stderr)
+        return 2
+
+    kind, target = COMMANDS[cmd]
+
+    if kind == 'core':
+        # Run as module: python3 -m isali_core.<target>
+        return subprocess.call(
+            [PYTHON, '-m', f'isali_core.{target}'] + rest,
+            env=os.environ,
+        )
+
+    if kind == 'skill':
+        script = ROOT / 'skills' / target / 'scripts' / 'main.py'
+        if not script.exists():
+            print(f'skill script not found: {script}', file=sys.stderr)
+            print(f'is skill "{target}" installed?', file=sys.stderr)
+            return 3
+        return subprocess.call(
+            [PYTHON, str(script)] + rest,
+            env=os.environ,
+        )
+
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

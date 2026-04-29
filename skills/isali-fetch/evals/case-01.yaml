@@ -1,0 +1,25 @@
+name: wechat-parse
+description: 能正确识别公众号 URL 并解析出 title/author/date/body
+
+input:
+  url: https://mp.weixin.qq.com/s/7ROLqZNLEaNGxRoUh90_gQ
+  mode: real   # 实际会调网络，作为端到端 eval
+
+expected:
+  exit_code: 0
+  source: wechat
+  json_keys: [title, author, date, body, markdown]
+  markdown_starts_with: "# "    # 有一级标题
+---
+name: source-detection
+description: URL → source 识别不经过网络
+
+inputs:
+  - url: https://mp.weixin.qq.com/s/xxx
+    expected_source: wechat
+  - url: https://x.com/foo/status/1
+    expected_source: x
+  - url: https://twitter.com/foo/status/1
+    expected_source: x
+  - url: https://example.com/article
+    expected_source: web

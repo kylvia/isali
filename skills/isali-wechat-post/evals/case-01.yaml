@@ -1,0 +1,21 @@
+name: basic-plan
+description: 基本 plan 模式不应产生副作用
+
+input:
+  md: "/tmp/__isali_test.md"
+  md_content: |
+    ---
+    title: 测试
+    author: test
+    ---
+    # 标题
+    正文
+  args: [--plan]
+
+expected:
+  exit_code: 0
+  stdout_contains:
+    - "Plan:"
+    - "file:"
+    - "theme:"
+  side_effects: none    # --plan 不能调用 baoyu、不能推送

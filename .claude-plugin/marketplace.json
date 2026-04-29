@@ -1,0 +1,16 @@
+{
+  "name": "isali",
+  "version": "0.1.0",
+  "description": "Your personal Claude harness extension — skills, CLI, profile, hooks for AI-assisted workflow",
+  "owner": {
+    "name": "isali"
+  },
+  "plugins": [
+    {
+      "name": "isali",
+      "source": "./",
+      "description": "isali core: skills collection and unified CLI wrapper",
+      "version": "0.1.0"
+    }
+  ]
+}
