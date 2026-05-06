@@ -18,10 +18,7 @@ harness:
 ## 详细参考
 
 - profile 字段映射 → `references/profile.md`
-- baoyu 底层命令 → `references/baoyu.md`
-- 标题/摘要/封面选择 → `references/article-fields.md`
-- 多账号切换 → `references/multi-account.md`
-- 失败排查（IP 白名单 / token 过期 / 图上传）→ `references/troubleshoot.md`
+- 底层命令、bun proxy 大小写自动 normalize 行为 → `references/baoyu.md`
 
 ## 自查
 

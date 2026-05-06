@@ -18,6 +18,29 @@ from isali_core import harness, logger, profile
 BAOYU_SCRIPT = Path(__file__).resolve().parent / 'wechat-api.ts'
 
 
+def _normalize_proxy_env(env: os._Environ | dict) -> dict:
+    """Sync proxy env vars across cases for downstream bun.
+
+    Bun >=1.3 honors only lowercase ``https_proxy`` / ``http_proxy`` / ``no_proxy``
+    when invoked from a Python ``subprocess`` chain, even though the upstream shell
+    only exported the uppercase ``HTTPS_PROXY`` / ``HTTP_PROXY`` (which is what the
+    pipeline historically documents). Mirror both directions so whichever case the
+    user set, bun sees it. Existing values win — never clobber.
+    """
+    out = dict(env)
+    for upper, lower in (
+        ('HTTPS_PROXY', 'https_proxy'),
+        ('HTTP_PROXY', 'http_proxy'),
+        ('NO_PROXY', 'no_proxy'),
+        ('ALL_PROXY', 'all_proxy'),
+    ):
+        if upper in out and lower not in out:
+            out[lower] = out[upper]
+        elif lower in out and upper not in out:
+            out[upper] = out[lower]
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog='isali push', description='Push markdown to WeChat draft')
     ap.add_argument('md', help='path to markdown file')
@@ -84,8 +107,10 @@ def main() -> int:
     if args.verbose:
         print(f'$ {" ".join(cmd)}', file=sys.stderr)
 
+    env = _normalize_proxy_env(os.environ)
+
     t0 = time.time()
-    rc = subprocess.call(cmd)
+    rc = subprocess.call(cmd, env=env)
     dt = time.time() - t0
 
     logger.audit(

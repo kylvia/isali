@@ -1,42 +1,60 @@
 ---
-# isali profile — edit ~/.isali/profile.yaml to override
-# All fields are optional; skills read what they need.
+# isali profile — DEFAULT / 兜底身份
+#
+# 这个文件**故意保持空**：一种写作风格 = 一个独立的 profile 文件。
+# default.yaml 不承载任何风格语义（tone / tags / cover style / cta / style.* 全部留空），
+# 仅作为 schema 文档 + 系统级中性默认（如语言）使用。
+#
+# 想用某种风格写作（走 isali CLI 原生命令）：
+#   1. cp profiles/_template.yaml ~/.isali/profiles/<风格名>.yaml  并改字段值
+#   2. isali profile switch <风格名>          # 把它复制为 ~/.isali/profile.yaml 激活
+#   3. 起草 / 推送
+#
+# 其他常用：
+#   isali profile list          # 列所有可用风格
+#   isali profile current       # 看当前激活的是哪个
+#   isali profile show <name>   # 看某风格详情
+#   isali profile diff <a> <b>  # 比对两种风格
+#   isali profile edit          # 编辑当前激活 profile
+#
+# 字段全部可选；为空 = skill 不约束该维度。
 
 name: default
+
 author:
-  display_name: you
+  display_name: ""
   email: ""
 
-# ─── 内容创作偏好 ───────────────────────────
+# ─── 内容（schema 占位，全空 = 不约束） ─────
 content:
-  tone: 温和吐槽派           # 封神派 / 温和吐槽派 / 事实核查派 / 独立博客风
-  length_target: 1500-2000
-  language: zh-CN
-  primary_color: "#8087EA"
-  tags:
-    - "#AI"
-    - "#科技"
+  tone: ""                   # 一句话风格标签；具体风格请走单独 profile
+  length_target: ""          # e.g. "1500-2500"
+  language: zh-CN            # 仅这一项是中性系统默认
+  primary_color: ""
+  tags: []
+
+  # 9 维度结构化风格指令；不在 default 里填，去单独 profile
+  # 字段说明见 skills/isali-wechat-post/references/profile.md
+  style: {}
 
 # ─── 微信公众号 ─────────────────────────────
 wechat:
-  default_theme: grace       # default / grace / simple / modern
-  account_alias: main        # 如果 baoyu 配了多账号
+  default_theme: ""          # default / grace / simple / modern
+  account_alias: ""
 
-# ─── 封面 ─────────────────────────────────
+# ─── 封面（schema 占位） ───────────────────
 cover:
-  aspect_ratio: "2.35:1"
-  style_preset: minimal-tech # minimal-tech / editorial / poster
-  brand_color: "#8087EA"
+  aspect_ratio: ""           # e.g. "2.35:1" / "16:9" / "1:1"
+  style_preset: ""           # minimal-tech / editorial / poster
+  brand_color: ""
 
-# ─── CTA 导流 ───────────────────────────────
-cta:
-  - text: 了解更多
-    url: https://example.com
+# ─── CTA 导流（空数组 = 不加导流段） ───────
+cta: []
 
-# ─── 运维域（未来扩展预留）────────────────
+# ─── 运维域（未来扩展预留） ────────────────
 ops:
   default_server: ""
 
-# ─── 前端域（未来扩展预留）────────────────
+# ─── 前端域（未来扩展预留） ────────────────
 frontend:
   ui_lib: ""
