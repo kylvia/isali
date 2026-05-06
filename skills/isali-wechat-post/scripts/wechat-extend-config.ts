@@ -130,25 +130,12 @@ function parseWechatExtend(content: string): WechatExtendConfig {
 }
 
 export function loadWechatExtendConfig(): WechatExtendConfig {
-  // Preferred: ~/.isali/wechat-extend.md. Fallbacks are legacy baoyu-skills paths.
-  const paths = [
-    path.join(os.homedir(), ".isali", "wechat-extend.md"),
-    path.join(process.cwd(), ".baoyu-skills", "baoyu-post-to-wechat", "EXTEND.md"),
-    path.join(
-      process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
-      "baoyu-skills", "baoyu-post-to-wechat", "EXTEND.md"
-    ),
-    path.join(os.homedir(), ".baoyu-skills", "baoyu-post-to-wechat", "EXTEND.md"),
-  ];
-  for (const p of paths) {
-    try {
-      const content = fs.readFileSync(p, "utf-8");
-      return parseWechatExtend(content);
-    } catch {
-      continue;
-    }
+  const p = path.join(os.homedir(), ".isali", "wechat-extend.md");
+  try {
+    return parseWechatExtend(fs.readFileSync(p, "utf-8"));
+  } catch {
+    return {};
   }
-  return {};
 }
 
 function selectAccount(config: WechatExtendConfig, alias?: string): WechatAccount | undefined {
@@ -268,19 +255,13 @@ function resolveCredentialSource(
 
   throw new Error(
     `Missing WECHAT_APP_ID or WECHAT_APP_SECRET${hint}.\n` +
-    "Set via EXTEND.md account config, environment variables, or .baoyu-skills/.env file." +
+    "Set via ~/.isali/wechat-extend.md account config, environment variables, or ~/.isali/wechat.env." +
     partialHint
   );
 }
 
 export function loadCredentials(account?: ResolvedAccount): LoadedCredentials {
-  // Preferred: ~/.isali/wechat.env. Fallback: ~/.baoyu-skills/.env (legacy).
-  const isaliEnvPath = path.join(os.homedir(), ".isali", "wechat.env");
-  const cwdLegacyPath = path.join(process.cwd(), ".baoyu-skills", ".env");
-  const homeLegacyPath = path.join(os.homedir(), ".baoyu-skills", ".env");
-  const isaliEnv = loadEnvFile(isaliEnvPath);
-  const cwdEnv = loadEnvFile(cwdLegacyPath);
-  const homeEnv = loadEnvFile(homeLegacyPath);
+  const isaliEnv = loadEnvFile(path.join(os.homedir(), ".isali", "wechat.env"));
 
   const sources: CredentialSource[] = [];
 
@@ -300,16 +281,12 @@ export function loadCredentials(account?: ResolvedAccount): LoadedCredentials {
     sources.push(
       buildCredentialSource(`process.env (${prefixedKeyLabel})`, process.env, `${prefix}APP_ID`, `${prefix}APP_SECRET`),
       buildCredentialSource(`~/.isali/wechat.env (${prefixedKeyLabel})`, isaliEnv, `${prefix}APP_ID`, `${prefix}APP_SECRET`),
-      buildCredentialSource(`<cwd>/.baoyu-skills/.env (${prefixedKeyLabel})`, cwdEnv, `${prefix}APP_ID`, `${prefix}APP_SECRET`),
-      buildCredentialSource(`~/.baoyu-skills/.env (${prefixedKeyLabel})`, homeEnv, `${prefix}APP_ID`, `${prefix}APP_SECRET`),
     );
   }
 
   sources.push(
     buildCredentialSource("process.env", process.env, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
     buildCredentialSource("~/.isali/wechat.env", isaliEnv, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
-    buildCredentialSource("<cwd>/.baoyu-skills/.env", cwdEnv, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
-    buildCredentialSource("~/.baoyu-skills/.env", homeEnv, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
   );
 
   return resolveCredentialSource(sources, account);

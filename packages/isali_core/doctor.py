@@ -51,12 +51,9 @@ def _chk_baoyu():
 
 @_check('wechat credentials')
 def _chk_wx():
-    new = Path.home() / '.isali/wechat.env'
-    legacy = Path.home() / '.baoyu-skills/.env'
-    if new.exists():
-        return True, str(new)
-    if legacy.exists():
-        return True, f'{legacy} (legacy path; consider moving to ~/.isali/wechat.env)'
+    p = Path.home() / '.isali/wechat.env'
+    if p.exists():
+        return True, str(p)
     return False, 'not found — create ~/.isali/wechat.env with WECHAT_APP_ID + WECHAT_APP_SECRET'
 
 

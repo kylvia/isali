@@ -25,7 +25,7 @@ bun <isali>/skills/isali-wechat-post/scripts/wechat-api.ts \
 
 ## 凭证
 
-`bun` 脚本读取 `~/.baoyu-skills/.env`，包含 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。
+`bun` 脚本读取 `~/.isali/wechat.env`，包含 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`（也接受同名 `process.env` 直传）。
 
 ## IP 白名单注意
 
