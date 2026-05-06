@@ -4,7 +4,7 @@
 
 `gpt-image-2` 通过 liaobots 的 OpenAI 兼容接口：
 
-- URL: `https://ai.liaobots.work/v1/chat/completions`
+- URL: `https://ai.liaobots1.work/v1/chat/completions`（也可用 `ISALI_IMAGE_API_URL` 覆盖）
 - Model name: `gpt-image-2`
 - Auth: Bearer token
 
@@ -26,7 +26,7 @@ image:
   # api_key 建议走环境变量而非写文件
 ```
 
-**注意**：不同端点的请求/响应格式可能不同。当前 `generate.py` 假设 OpenAI chat/completions 兼容接口（返回 data URI 嵌在 `choices[0].message.content` 里）。
+**注意**：不同端点的请求/响应格式可能不同。当前 `generate.py` 支持 OpenAI chat/completions 兼容接口下两种返回：`choices[0].message.content` 内嵌 `data:image/...;base64,...`，或 Markdown 图片链接 `![...](https://...)`（会再下载到本地）。
 
 如果要支持标准 `/v1/images/generations`，需扩展 `generate.py` 的响应解析分支。
 

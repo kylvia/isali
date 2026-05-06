@@ -13,10 +13,15 @@ from pathlib import Path
 
 from isali_core import logger, profile
 
+try:
+    import httpx as _httpx
+except ImportError:
+    _httpx = None
+
 ROOT = Path(__file__).resolve().parent.parent
 PRESETS_DIR = ROOT / 'presets'
 
-DEFAULT_API_URL = 'https://ai.liaobots.work/v1/chat/completions'
+DEFAULT_API_URL = 'https://ai.liaobots1.work/v1/chat/completions'
 DEFAULT_MODEL = 'gpt-image-2'
 
 
@@ -71,32 +76,83 @@ def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
         )
     model = os.environ.get('ISALI_IMAGE_MODEL') or profile.get('image.model', DEFAULT_MODEL)
 
-    req = urllib.request.Request(
-        api_url,
-        method='POST',
-        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
-        data=json.dumps(
-            {
-                'model': model,
-                'messages': [{'role': 'user', 'content': prompt}],
-                'temperature': 1,
-                'stream': False,
-            }
-        ).encode(),
-    )
+    headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+    body = {
+        'model': model,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'temperature': 1,
+        'stream': False,
+    }
 
+    # httpx > urllib for this gateway: urllib hits "Remote end closed connection
+    # without response" against ai.liaobots1.work in ~3s, httpx works. Even
+    # then, the gateway frequently disconnects the FIRST connection ~3s after
+    # POST and accepts retries cleanly, so we retry up to 3 times.
     t0 = time.time()
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read())
+    if _httpx is not None:
+        last_exc = None
+        data = None
+        for attempt in range(3):
+            try:
+                with _httpx.Client(timeout=timeout) as c:
+                    resp = c.post(api_url, headers=headers, json=body)
+                    resp.raise_for_status()
+                    data = resp.json()
+                break
+            except _httpx.RemoteProtocolError as e:
+                last_exc = e
+                continue
+        if data is None:
+            raise RuntimeError(f'all 3 attempts failed: {last_exc}')
+    else:
+        req = urllib.request.Request(
+            api_url, method='POST', headers=headers,
+            data=json.dumps(body).encode(),
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
     dt = time.time() - t0
 
     content = data['choices'][0]['message']['content']
-    m = re.search(r'data:image/(\w+);base64,([A-Za-z0-9+/=]+)', content)
-    if not m:
+
+    # Two known response formats:
+    #   1. base64 data URI inline:  data:image/png;base64,<...>
+    #   2. markdown URL link:       ![image](https://.../foo.png)
+    m_b64 = re.search(r'data:image/(\w+);base64,([A-Za-z0-9+/=]+)', content)
+    m_url = re.search(r'!\[[^\]]*\]\((https?://[^\s)]+)\)', content)
+
+    if m_b64:
+        ext, b64 = m_b64.group(1), m_b64.group(2)
+        img = base64.b64decode(b64)
+    elif m_url:
+        url = m_url.group(1)
+        ext = url.rsplit('.', 1)[-1].split('?', 1)[0].lower()
+        if ext not in ('png', 'jpg', 'jpeg', 'webp'):
+            ext = 'png'
+        # Same gateway flakiness applies to the image CDN: urllib often does an
+        # IncompleteRead, httpx is more reliable. Retry a couple times.
+        img = None
+        last_exc = None
+        for attempt in range(3):
+            try:
+                if _httpx is not None:
+                    with _httpx.Client(timeout=timeout) as c:
+                        r = c.get(url)
+                        r.raise_for_status()
+                        img = r.content
+                else:
+                    with urllib.request.urlopen(url, timeout=timeout) as r:
+                        img = r.read()
+                if img:
+                    break
+            except Exception as e:
+                last_exc = e
+                continue
+        if not img:
+            raise RuntimeError(f'image download failed after 3 attempts: {last_exc}')
+    else:
         raise RuntimeError(f'no image in response. Head: {content[:200]}')
 
-    ext, b64 = m.group(1), m.group(2)
-    img = base64.b64decode(b64)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(img)
