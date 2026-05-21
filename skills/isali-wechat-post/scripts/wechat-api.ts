@@ -9,6 +9,7 @@ import {
   needsWechatBodyImageProcessing,
   detectImageFormatFromBuffer,
 } from "./wechat-image-processor.ts";
+import { assertNoUnresolvedImagePlaceholders } from "./wechat-placeholder-guard.ts";
 
 interface AccessTokenResponse {
   access_token?: string;
@@ -731,6 +732,7 @@ async function main(): Promise<void> {
     needNewsCoverFallback,
   );
   htmlContent = processedHtml;
+  assertNoUnresolvedImagePlaceholders(htmlContent);
 
   let thumbMediaId = "";
 
