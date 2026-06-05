@@ -36,6 +36,11 @@ interface ImageInfo {
   originalPath: string;
 }
 
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
 interface MarkdownRenderResult {
   title: string;
   author: string;
@@ -62,6 +67,8 @@ const TOKEN_URL = "https://api.weixin.qq.com/cgi-bin/token";
 const UPLOAD_BODY_IMG_URL = "https://api.weixin.qq.com/cgi-bin/media/uploadimg";
 const UPLOAD_MATERIAL_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material";
 const DRAFT_URL = "https://api.weixin.qq.com/cgi-bin/draft/add";
+const WECHAT_COVER_ASPECT_RATIO = 2.35;
+const WECHAT_COVER_ASPECT_TOLERANCE = 0.05;
 
 async function fetchAccessToken(appId: string, appSecret: string): Promise<string> {
   const url = `${TOKEN_URL}?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
@@ -84,7 +91,7 @@ function toHttpsUrl(url: string | undefined): string {
   return url.startsWith("http://") ? url.replace(/^http:\/\//i, "https://") : url;
 }
 
-async function loadUploadAsset(
+export async function loadUploadAsset(
   imagePath: string,
   baseDir?: string,
 ): Promise<WechatUploadAsset> {
@@ -93,6 +100,7 @@ async function loadUploadAsset(
   let contentType: string;
   let fileSize = 0;
   let fileExt = "";
+  let localPath: string | undefined;
 
   if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
     const response = await fetch(imagePath);
@@ -124,6 +132,7 @@ async function loadUploadAsset(
     fileSize = stats.size;
     fileBuffer = fs.readFileSync(resolvedPath);
     filename = path.basename(resolvedPath);
+    localPath = resolvedPath;
     fileExt = path.extname(filename).toLowerCase();
     const mimeTypes: Record<string, string> = {
       ".jpg": "image/jpeg",
@@ -148,6 +157,14 @@ async function loadUploadAsset(
     contentType = detected.contentType;
     fileExt = detected.fileExt;
     filename = `${path.basename(filename, path.extname(filename))}${detected.fileExt}`;
+    if (localPath) {
+      const correctedPath = path.join(path.dirname(localPath), filename);
+      if (correctedPath !== localPath) {
+        fs.writeFileSync(correctedPath, fileBuffer);
+        console.error(`[wechat-api] Materialized corrected image path: ${correctedPath}`);
+        localPath = correctedPath;
+      }
+    }
   }
 
   return {
@@ -156,17 +173,74 @@ async function loadUploadAsset(
     contentType,
     fileExt,
     fileSize,
+    localPath,
   };
+}
+
+export function readImageDimensions(buffer: Buffer): ImageDimensions {
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (buffer.length >= 24 && buffer.subarray(0, 8).equals(pngSignature)) {
+    return {
+      width: buffer.readUInt32BE(16),
+      height: buffer.readUInt32BE(20),
+    };
+  }
+
+  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.length) {
+      if (buffer[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = buffer[offset + 1];
+      const segmentLength = buffer.readUInt16BE(offset + 2);
+      const isStartOfFrame =
+        marker !== undefined &&
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        ![0xc4, 0xc8, 0xcc].includes(marker);
+      if (isStartOfFrame) {
+        return {
+          height: buffer.readUInt16BE(offset + 5),
+          width: buffer.readUInt16BE(offset + 7),
+        };
+      }
+      if (!segmentLength || segmentLength < 2) break;
+      offset += 2 + segmentLength;
+    }
+  }
+
+  throw new Error("Unsupported image format for dimension validation");
+}
+
+export function assertWechatCoverAspectRatio(
+  dimensions: ImageDimensions,
+  imagePath: string,
+  expected = WECHAT_COVER_ASPECT_RATIO,
+  tolerance = WECHAT_COVER_ASPECT_TOLERANCE,
+): void {
+  const ratio = dimensions.width / dimensions.height;
+  if (Math.abs(ratio - expected) <= tolerance) return;
+  throw new Error(
+    `Cover image aspect ratio invalid for ${imagePath}: ` +
+    `${ratio.toFixed(2)}:1 (${dimensions.width}x${dimensions.height}); expected about ${expected}:1`,
+  );
 }
 
 async function uploadImage(
   imagePath: string,
   accessToken: string,
   baseDir?: string,
-  uploadType: "body" | "material" = "body"
+  uploadType: "body" | "material" = "body",
+  options: { validateCoverAspect?: boolean } = {},
 ): Promise<UploadResponse> {
   const asset = await loadUploadAsset(imagePath, baseDir);
   let uploadAsset = asset;
+
+  if (options.validateCoverAspect) {
+    assertWechatCoverAspectRatio(readImageDimensions(uploadAsset.buffer), uploadAsset.localPath || imagePath);
+  }
 
   if (uploadType === "body" && needsWechatBodyImageProcessing(asset)) {
     const prepared = await prepareWechatBodyImageUpload(asset);
@@ -739,7 +813,7 @@ async function main(): Promise<void> {
   if (coverPath) {
     console.error(`[wechat-api] Uploading cover: ${coverPath}`);
     // 封面图片使用 material/add_material 接口
-    const coverResp = await uploadImage(coverPath, accessToken, baseDir, "material");
+    const coverResp = await uploadImage(coverPath, accessToken, baseDir, "material", { validateCoverAspect: true });
     thumbMediaId = coverResp.media_id;
     console.error(`[wechat-api] Cover uploaded successfully, media_id: ${thumbMediaId}`);
   } else if (firstCoverMediaId && args.articleType === "news") {
@@ -781,7 +855,9 @@ async function main(): Promise<void> {
   console.error(`[wechat-api] Published successfully! media_id: ${result.media_id}`);
 }
 
-await main().catch((err) => {
-  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  await main().catch((err) => {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
+}
