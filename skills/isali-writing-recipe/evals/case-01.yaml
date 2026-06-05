@@ -1,0 +1,39 @@
+name: recipe-routing-smoke
+description: Offline smoke cases for routing 7-question intake answers to recipe choices.
+
+cases:
+  - name: pain-point-tutorial
+    input:
+      article_type: 痛点解决
+      hook: 场景认领
+      emotion: 共鸣→认知
+      controversy: L1
+    expected:
+      recipe: pain-point-tutorial
+      must_require_material_precheck: true
+      must_output_recipe_card: true
+
+  - name: news-takeaway-with-twist
+    input:
+      article_type: 资讯解读
+      hook: 悬念抛出
+      emotion: 一直冷静
+      controversy: L1
+      has_twist: true
+    expected:
+      recipe: news-takeaway-with-twist
+      must_require_material_precheck: true
+      must_output_recipe_card: true
+
+  - name: incomplete-materials
+    input:
+      article_type: 痛点解决
+      hook: 场景认领
+      emotion: 共鸣→认知
+      material_precheck:
+        scene_examples: 1
+        sourced_data: 0
+        original_angle: 1
+    expected:
+      must_refuse_draft: true
+      must_request_more_materials: true
