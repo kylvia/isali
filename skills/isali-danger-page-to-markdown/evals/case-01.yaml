@@ -1,0 +1,85 @@
+name: page-to-markdown-offline-contract
+description: Offline contract cases for URL planning and extracted JSON to Markdown rendering.
+
+cases:
+  - name: adapter-routing
+    mode: plan
+    inputs:
+      - url: https://x.com/elonmusk/status/1234567890
+        expected:
+          adapter: x
+          kind: tweet
+      - url: https://mp.weixin.qq.com/s/example
+        expected:
+          adapter: wechat
+          kind: wechat_article
+      - url: https://example.com/article
+        expected:
+          adapter: generic
+          kind: page
+
+  - name: generic-article-render
+    mode: offline-render
+    fixture:
+      adapter: generic
+      kind: article
+      url: https://example.com/article
+      title: Example Title
+      author:
+        name: Ada
+      publishedAt: "2026-06-05"
+      bodyHtml: "<p>Hello <strong>world</strong>.</p>"
+      media:
+        - type: photo
+          url: https://example.com/cover.jpg
+      warnings: []
+    expected_markdown_contains:
+      - 'title: "Example Title"'
+      - '# Example Title'
+      - '**world**'
+      - 'coverImage: "https://example.com/cover.jpg"'
+      - 'adapter: "generic"'
+
+  - name: x-thread-render
+    mode: offline-render
+    fixture:
+      adapter: x
+      kind: tweet
+      tweetId: "111"
+      url: https://x.com/foo/status/111
+      author:
+        name: Foo Bar
+        handle: foo
+      thread:
+        - id: "111"
+          url: https://x.com/foo/status/111
+          isRoot: true
+          text: first tweet
+          htmlText: first tweet
+          media:
+            - type: photo
+              url: https://example.com/a.jpg
+              alt: ""
+        - id: "112"
+          url: https://x.com/foo/status/112
+          isRoot: false
+          text: second tweet
+          htmlText: second tweet
+          media: []
+      article: null
+      warnings: []
+    expected_markdown_contains:
+      - 'tweetCount: 2'
+      - 'author: "Foo Bar (@foo)"'
+      - "## 1"
+      - "## 2"
+      - "![](https://example.com/a.jpg)"
+      - 'adapter: "x"'
+
+  - name: safety-boundaries
+    mode: documentation
+    expected:
+      no_private_api: true
+      no_cookie_extraction: true
+      no_login_bypass: true
+      no_media_download_promise: true
