@@ -21,8 +21,19 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 PRESETS_DIR = ROOT / 'presets'
 
-DEFAULT_API_URL = 'https://ai.liaobots1.work/v1/chat/completions'
+DEFAULT_API_URL = 'https://ai.liaobots1.work/v1/images/generations'
 DEFAULT_MODEL = 'gpt-image-2'
+
+
+def _images_endpoint(api_url: str) -> str:
+    """Map any configured endpoint onto the images/generations one.
+
+    gpt-image-2 was dropped from the Chat Completions endpoint (400
+    "This model is not supported on the Chat Completions endpoint"), so a
+    chat-style URL left over in ~/.isali/image.env has to be rewritten
+    rather than trusted.
+    """
+    return re.sub(r'/chat/completions/?$', '/images/generations', api_url)
 
 
 def load_preset(name: str) -> str:
@@ -63,8 +74,10 @@ def build_prompt(
     )
 
 
-def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
-    """Call gpt-image-2 API, save PNG, return metadata dict."""
+def generate_image(
+    prompt: str, out_path: Path, timeout: int = 180, size: str = '1536x1024'
+) -> dict:
+    """Call gpt-image-2 images/generations API, save PNG, return metadata dict."""
     api_url = os.environ.get('ISALI_IMAGE_API_URL') or profile.get(
         'image.api_url', DEFAULT_API_URL
     )
@@ -75,13 +88,14 @@ def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
             'or add `image.api_key: "<key>"` to ~/.isali/profile.yaml'
         )
     model = os.environ.get('ISALI_IMAGE_MODEL') or profile.get('image.model', DEFAULT_MODEL)
+    api_url = _images_endpoint(api_url)
 
     headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
     body = {
         'model': model,
-        'messages': [{'role': 'user', 'content': prompt}],
-        'temperature': 1,
-        'stream': False,
+        'prompt': prompt,
+        'n': 1,
+        'size': size,
     }
 
     # httpx > urllib for this gateway: urllib hits "Remote end closed connection
@@ -102,6 +116,13 @@ def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
             except _httpx.RemoteProtocolError as e:
                 last_exc = e
                 continue
+            except _httpx.HTTPStatusError as e:
+                # Surface the gateway's own message — e.g. dropping a model from
+                # an endpoint shows up here as a 400, not a transport error.
+                raise RuntimeError(
+                    f'{e.response.status_code} from {api_url}: '
+                    f'{e.response.text[:300]}'
+                ) from e
         if data is None:
             raise RuntimeError(f'all 3 attempts failed: {last_exc}')
     else:
@@ -113,19 +134,32 @@ def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
             data = json.loads(resp.read())
     dt = time.time() - t0
 
-    content = data['choices'][0]['message']['content']
+    # images/generations returns {"data":[{"b64_json"|"url": ...}]}.
+    # Older chat-style gateways answered with choices[].message.content holding
+    # either an inline data URI or a markdown image link — still handled so a
+    # gateway rollback doesn't break cover generation again.
+    b64 = ext = url = None
+    item = (data.get('data') or [{}])[0]
 
-    # Two known response formats:
-    #   1. base64 data URI inline:  data:image/png;base64,<...>
-    #   2. markdown URL link:       ![image](https://.../foo.png)
-    m_b64 = re.search(r'data:image/(\w+);base64,([A-Za-z0-9+/=]+)', content)
-    m_url = re.search(r'!\[[^\]]*\]\((https?://[^\s)]+)\)', content)
+    if item.get('b64_json'):
+        b64, ext = item['b64_json'], 'png'
+    elif item.get('url'):
+        url = item['url']
+    else:
+        try:
+            content = data['choices'][0]['message']['content']
+        except (KeyError, IndexError, TypeError):
+            raise RuntimeError(f'no image in response. Head: {str(data)[:200]}')
+        if m := re.search(r'data:image/(\w+);base64,([A-Za-z0-9+/=]+)', content):
+            ext, b64 = m.group(1), m.group(2)
+        elif m := re.search(r'!\[[^\]]*\]\((https?://[^\s)]+)\)', content):
+            url = m.group(1)
+        else:
+            raise RuntimeError(f'no image in response. Head: {content[:200]}')
 
-    if m_b64:
-        ext, b64 = m_b64.group(1), m_b64.group(2)
+    if b64:
         img = base64.b64decode(b64)
-    elif m_url:
-        url = m_url.group(1)
+    else:
         ext = url.rsplit('.', 1)[-1].split('?', 1)[0].lower()
         if ext not in ('png', 'jpg', 'jpeg', 'webp'):
             ext = 'png'
@@ -150,8 +184,6 @@ def generate_image(prompt: str, out_path: Path, timeout: int = 180) -> dict:
                 continue
         if not img:
             raise RuntimeError(f'image download failed after 3 attempts: {last_exc}')
-    else:
-        raise RuntimeError(f'no image in response. Head: {content[:200]}')
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
